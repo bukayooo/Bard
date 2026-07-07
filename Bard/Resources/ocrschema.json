@@ -1,0 +1,9 @@
+{
+  "type": "object",
+  "properties": {
+    "title": { "type": "string" },
+    "author": { "type": "string" },
+    "content": { "type": "string" }
+  },
+  "required": ["title", "author", "content"]
+}
