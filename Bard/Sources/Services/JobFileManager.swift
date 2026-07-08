@@ -57,4 +57,40 @@ enum JobFileManager {
         try fm.copyItem(at: producedURL, to: dest)
         return dest
     }
+
+    /// Lists entries under Application Support/Bard/Jobs that aren't in `activePaths`
+    /// — i.e. leftover job folders Bard has no other way to reach, since it doesn't
+    /// persist job history across launches (from a previous session, or a crash).
+    static func orphanedJobDirs(excluding activePaths: Set<String>) -> [URL] {
+        let fm = FileManager.default
+        guard
+            let appSupport = try? fm.url(
+                for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: false)
+        else { return [] }
+        let jobsDir = appSupport.appendingPathComponent("Bard/Jobs", isDirectory: true)
+        guard let entries = try? fm.contentsOfDirectory(at: jobsDir, includingPropertiesForKeys: nil) else {
+            return []
+        }
+        return entries.filter { !activePaths.contains($0.standardizedFileURL.path) }
+    }
+
+    static func directorySize(_ url: URL) -> Int64 {
+        guard
+            let enumerator = FileManager.default.enumerator(
+                at: url, includingPropertiesForKeys: [.fileSizeKey])
+        else { return 0 }
+        var total: Int64 = 0
+        for case let fileURL as URL in enumerator {
+            if let size = try? fileURL.resourceValues(forKeys: [.fileSizeKey]).fileSize {
+                total += Int64(size)
+            }
+        }
+        return total
+    }
+
+    static func deleteJobDirs(_ dirs: [URL]) {
+        for dir in dirs {
+            try? FileManager.default.removeItem(at: dir)
+        }
+    }
 }

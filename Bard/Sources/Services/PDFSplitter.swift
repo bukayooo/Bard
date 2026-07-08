@@ -23,10 +23,9 @@ enum PDFSplitter {
     }
 
     /// Splits a PDF into consecutive chunks of at most `maxPages` pages each,
-    /// returning the PDF bytes for every chunk in page order. Mistral's
-    /// document_annotation_format is capped at 8 pages per request, so chunking
-    /// is required for anything longer than that.
-    static func splitIntoChunks(url: URL, maxPages: Int = 8) throws -> [Data] {
+    /// returning the PDF bytes for every chunk in page order. Used to bound
+    /// request/response size and timeouts for the raw OCR call.
+    static func splitIntoChunks(url: URL, maxPages: Int) throws -> [Data] {
         guard let doc = PDFDocument(url: url) else { throw PDFSplitterError.cannotLoad }
         let count = doc.pageCount
         guard count > 0 else { throw PDFSplitterError.emptyDocument }

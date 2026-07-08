@@ -14,4 +14,9 @@ enum JobState: Equatable {
         default: return false
         }
     }
+
+    var isFailed: Bool {
+        if case .failed = self { return true }
+        return false
+    }
 }

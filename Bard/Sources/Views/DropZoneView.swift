@@ -5,26 +5,53 @@ import UniformTypeIdentifiers
 struct DropZoneView: View {
     let onFileChosen: (URL) -> Void
     @State private var isTargeted = false
+    @Environment(\.colorScheme) private var colorScheme
 
     private static let epubType = UTType(filenameExtension: "epub") ?? .data
 
     var body: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "book.and.wrench")
-                .font(.system(size: 56))
-                .foregroundStyle(.secondary)
-            Text("Drop an EPUB, PDF, or TXT file")
-                .font(.title2)
-            Text("Bard will extract the text and turn it into an audiobook")
-                .foregroundStyle(.secondary)
-            Button("Choose File…") {
+        VStack(spacing: 22) {
+            Spacer()
+
+            ZStack {
+                Circle()
+                    .fill(BardTheme.terracotta.opacity(colorScheme == .dark ? 0.16 : 0.12))
+                    .frame(width: 108, height: 108)
+                Image(systemName: "theatermasks")
+                    .font(.system(size: 42, weight: .light))
+                    .foregroundStyle(BardTheme.terracotta)
+            }
+
+            VStack(spacing: 8) {
+                Text("Bard")
+                    .font(.bardDisplay(30))
+                Text("Drop an EPUB, PDF, or TXT file to begin")
+                    .font(.system(size: 14, design: .serif))
+                    .foregroundStyle(.secondary)
+            }
+
+            GreekKeyRule()
+                .frame(width: 220)
+                .opacity(0.7)
+
+            Button {
                 chooseFile()
+            } label: {
+                Text("Choose File…")
+                    .frame(minWidth: 140)
             }
             .buttonStyle(.borderedProminent)
+            .tint(BardTheme.terracotta)
             .controlSize(.large)
+
+            Spacer()
+            Spacer()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(isTargeted ? Color.accentColor.opacity(0.08) : Color.clear)
+        .background(
+            RoundedRectangle(cornerRadius: 0)
+                .fill(isTargeted ? BardTheme.terracotta.opacity(0.08) : Color.clear)
+        )
         .onDrop(of: [.fileURL], isTargeted: $isTargeted) { providers in
             handleDrop(providers: providers)
         }

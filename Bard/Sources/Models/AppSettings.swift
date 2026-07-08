@@ -38,6 +38,12 @@ final class AppSettings: @unchecked Sendable {
         didSet { defaults.set(outputFolderPath, forKey: "outputFolderPath") }
     }
 
+    /// Path to a preferred external text editor .app bundle (e.g. BBEdit, Sublime Text).
+    /// Empty means "no external editor configured" — the built-in text view is used only.
+    var externalEditorPath: String {
+        didSet { defaults.set(externalEditorPath, forKey: "externalEditorPath") }
+    }
+
     var availableVoices: [String] = AppSettings.fallbackVoices
 
     private init() {
@@ -48,6 +54,7 @@ final class AppSettings: @unchecked Sendable {
         paragraphPauseMs = defaults.object(forKey: "paragraphPauseMs") as? Int ?? 1200
         outputFolderPath = defaults.string(forKey: "outputFolderPath")
             ?? ("~/Documents/Audiobooks" as NSString).expandingTildeInPath
+        externalEditorPath = defaults.string(forKey: "externalEditorPath") ?? ""
     }
 
     var epub2ttsRepoURL: URL { URL(fileURLWithPath: epub2ttsRepoPath) }
@@ -63,5 +70,15 @@ final class AppSettings: @unchecked Sendable {
 
     func isRepoConfigured() -> Bool {
         FileManager.default.isExecutableFile(atPath: epub2ttsBinaryURL.path)
+    }
+
+    var externalEditorURL: URL? {
+        externalEditorPath.isEmpty ? nil : URL(fileURLWithPath: externalEditorPath)
+    }
+
+    var hasExternalEditor: Bool { externalEditorURL != nil }
+
+    var externalEditorName: String {
+        externalEditorURL?.deletingPathExtension().lastPathComponent ?? "External Editor"
     }
 }

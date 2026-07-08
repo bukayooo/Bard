@@ -7,16 +7,15 @@ struct ExtractionProgressView: View {
         VStack(spacing: 16) {
             ProgressView()
                 .controlSize(.large)
+                .tint(BardTheme.terracotta)
             Text(headline)
-                .font(.title3)
+                .font(.bardDisplay(17, weight: .medium))
             if !detail.isEmpty {
                 Text(detail)
-                    .font(.callout)
+                    .font(.system(.callout, design: .serif))
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
             }
-            LogView(lines: viewModel.job.log)
-                .frame(maxHeight: 220)
         }
         .padding(40)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -25,7 +24,7 @@ struct ExtractionProgressView: View {
     private var headline: String {
         switch viewModel.job.kind {
         case .epub: return "Extracting text from EPUB…"
-        case .pdf: return "Converting PDF with Mistral OCR…"
+        case .pdf: return "Extracting text from PDF…"
         case .txt: return "Loading text…"
         }
     }

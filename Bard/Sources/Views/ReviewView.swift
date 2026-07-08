@@ -9,17 +9,41 @@ struct ReviewView: View {
     var body: some View {
         HSplitView {
             VStack(alignment: .leading, spacing: 0) {
-                Text("Extracted Text")
-                    .font(.headline)
-                    .padding([.horizontal, .top])
+                HStack {
+                    SectionLabel(text: "Extracted Text")
+                    Spacer()
+                    Button {
+                        viewModel.reloadFromDisk()
+                    } label: {
+                        Label("Refresh", systemImage: "arrow.clockwise")
+                    }
+                    .buttonStyle(.borderless)
+                    .foregroundStyle(BardTheme.terracotta)
+                    .help("Reload the text file from disk (e.g. after editing it externally)")
+                    if AppSettings.shared.hasExternalEditor {
+                        Button {
+                            viewModel.openInExternalEditor()
+                        } label: {
+                            Label(
+                                "Open in \(AppSettings.shared.externalEditorName)",
+                                systemImage: "arrow.up.forward.app")
+                        }
+                        .buttonStyle(.borderless)
+                        .foregroundStyle(BardTheme.terracotta)
+                    }
+                }
+                .padding(.horizontal, 14)
+                .padding(.top, 12)
+                .padding(.bottom, 6)
                 TextEditor(text: $viewModel.editableText)
                     .font(.system(.body, design: .monospaced))
-                    .padding(.horizontal)
-                    .padding(.bottom)
+                    .scrollContentBackground(.hidden)
+                    .padding(.horizontal, 10)
+                    .padding(.bottom, 10)
             }
-            .frame(minWidth: 380)
+            .frame(minWidth: 360)
 
-            VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 18) {
                 coverSection
                 Divider()
                 voiceSection
@@ -33,11 +57,12 @@ struct ReviewView: View {
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
+                .tint(BardTheme.terracotta)
                 .controlSize(.large)
                 .disabled(viewModel.editableText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
-            .padding()
-            .frame(minWidth: 260, maxWidth: 320)
+            .padding(16)
+            .frame(minWidth: 280, idealWidth: 300, maxWidth: 340)
         }
         .task {
             voices = await Epub2TTSRunner.shared.listVoices()
@@ -46,16 +71,20 @@ struct ReviewView: View {
 
     private var coverSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Cover").font(.headline)
+            SectionLabel(text: "Cover")
             if let coverURL = viewModel.coverPreviewURL, let image = NSImage(contentsOf: coverURL) {
                 Image(nsImage: image)
                     .resizable()
                     .aspectRatio(contentMode: .fit)
                     .frame(height: 160)
-                    .cornerRadius(6)
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 6)
+                            .strokeBorder(BardTheme.terracottaDeep.opacity(0.4), lineWidth: 1)
+                    )
             } else {
                 RoundedRectangle(cornerRadius: 6)
-                    .fill(Color.secondary.opacity(0.15))
+                    .fill(Color.secondary.opacity(0.12))
                     .frame(height: 160)
                     .overlay(Text("No cover").foregroundStyle(.secondary))
             }
@@ -72,7 +101,7 @@ struct ReviewView: View {
 
     private var voiceSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Voice").font(.headline)
+            SectionLabel(text: "Voice")
             Picker("Speaker", selection: $viewModel.speaker) {
                 ForEach(voices, id: \.self) { voice in
                     Text(voice).tag(voice)
@@ -84,7 +113,7 @@ struct ReviewView: View {
 
     private var pauseSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Pauses (ms)").font(.headline)
+            SectionLabel(text: "Pauses (ms)")
             Stepper(
                 "Sentence: \(viewModel.sentencePauseMs)", value: $viewModel.sentencePauseMs,
                 in: 0...5000, step: 100)

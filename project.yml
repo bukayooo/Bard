@@ -34,6 +34,12 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.bard.Bard
         MARKETING_VERSION: "1.0"
         CURRENT_PROJECT_VERSION: "1"
+        # Pinned to the free Personal Team's Apple Development identity so the app's
+        # code signature is stable (cert + bundle id) across rebuilds. Without this,
+        # Xcode falls back to ad-hoc signing, which hashes the actual binary bytes —
+        # a new "identity" every rebuild — so Keychain treats each build as an
+        # unrecognized app and reprompts for the login password every launch.
+        DEVELOPMENT_TEAM: 9YYZ7P7Y9Q
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         ENABLE_PREVIEWS: YES

@@ -4,41 +4,50 @@ struct SynthesisProgressView: View {
     let viewModel: JobViewModel
 
     var body: some View {
-        VStack(spacing: 16) {
-            if let fraction {
-                ProgressView(value: fraction)
-                    .frame(maxWidth: 320)
-                Text("\(Int(fraction * 100))%")
-                    .font(.title3)
-            } else {
-                ProgressView()
-                    .controlSize(.large)
+        VStack {
+            Text("Generating Audiobook")
+                .font(.bardDisplay(20, weight: .semibold))
+                .padding(.top, 28)
+
+            Spacer()
+
+            VStack(spacing: 14) {
+                if let fraction {
+                    ProgressView(value: fraction)
+                        .frame(width: 320)
+                        .tint(BardTheme.terracotta)
+                    Text("\(Int((fraction * 100).rounded()))%")
+                        .font(.bardDisplay(28, weight: .semibold))
+                } else {
+                    ProgressView()
+                        .controlSize(.large)
+                        .tint(BardTheme.terracotta)
+                }
             }
-            Text("Generating audiobook…")
-                .font(.title3)
-            if !detail.isEmpty {
-                Text(detail)
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
+
+            if let stallWarning = viewModel.stallWarning {
+                Label(stallWarning, systemImage: "wifi.exclamationmark")
+                    .font(.system(.callout, design: .serif))
+                    .foregroundStyle(.orange)
+                    .multilineTextAlignment(.leading)
+                    .padding(10)
+                    .frame(maxWidth: 480)
+                    .background(Color.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
+                    .padding(.top, 16)
             }
-            LogView(lines: viewModel.job.log)
-                .frame(maxHeight: 220)
+
+            Spacer()
+
             Button("Cancel", role: .destructive) {
                 viewModel.cancelSynthesis()
             }
+            .padding(.bottom, 28)
         }
-        .padding(40)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var fraction: Double? {
         if case .synthesizing(_, let f) = viewModel.job.state { return f }
         return nil
-    }
-
-    private var detail: String {
-        if case .synthesizing(let d, _) = viewModel.job.state { return d }
-        return ""
     }
 }

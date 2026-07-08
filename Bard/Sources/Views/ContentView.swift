@@ -3,14 +3,24 @@ import SwiftUI
 struct ContentView: View {
     @State private var jobViewModels: [JobViewModel] = []
     @State private var selectedID: UUID?
+    @State private var columnVisibility: NavigationSplitViewVisibility = .all
 
     var body: some View {
-        NavigationSplitView {
+        NavigationSplitView(columnVisibility: $columnVisibility) {
             List(selection: $selectedID) {
                 ForEach(jobViewModels, id: \.job.id) { vm in
                     JobRow(viewModel: vm)
                         .tag(vm.job.id)
+                        .contextMenu {
+                            Button("Delete", role: .destructive) {
+                                deleteJob(vm)
+                            }
+                        }
                 }
+                .onDelete(perform: deleteJobs)
+            }
+            .onDeleteCommand {
+                deleteSelectedJob()
             }
             .navigationTitle("Bard")
             .toolbar {
@@ -22,8 +32,22 @@ struct ContentView: View {
                     }
                     .help("Start a new audiobook")
                 }
+                ToolbarItem {
+                    Button(role: .destructive) {
+                        clearFailedJobs()
+                    } label: {
+                        Label("Clear Failed", systemImage: "trash")
+                    }
+                    .help("Remove all failed jobs")
+                    .disabled(!jobViewModels.contains { $0.job.state.isFailed })
+                }
             }
-            .frame(minWidth: 220)
+            // Use NavigationSplitView's own column-sizing API rather than a plain
+            // .frame(minWidth:) here — mixing the two caused layout conflicts
+            // (visible glitches/overlap) whenever the window wasn't at a very
+            // generous size, since raw frame constraints on a split-view column
+            // fight the split view's own resize/collapse math.
+            .navigationSplitViewColumnWidth(min: 220, ideal: 260, max: 320)
         } detail: {
             if let vm = jobViewModels.first(where: { $0.job.id == selectedID }) {
                 JobDetailView(viewModel: vm)
@@ -40,6 +64,7 @@ struct ContentView: View {
         guard let kind = SourceKind.from(url: url) else { return }
         do {
             let (workDir, _) = try JobFileManager.createJob(for: url)
+            ActiveJobsRegistry.shared.register(workDir)
             let job = Job(kind: kind, originalURL: url, workDir: workDir)
             let vm = JobViewModel(job: job)
             jobViewModels.append(vm)
@@ -53,6 +78,38 @@ struct ContentView: View {
             selectedID = job.id
         }
     }
+
+    /// Removes a job from the list and cleans up its working directory — for
+    /// failed jobs especially, that can hold tens to hundreds of MB of partial
+    /// audio, so "delete" here means actually reclaiming the disk space too.
+    private func deleteJob(_ vm: JobViewModel) {
+        if case .synthesizing = vm.job.state {
+            vm.cancelSynthesis()
+        }
+        if selectedID == vm.job.id {
+            selectedID = nil
+        }
+        jobViewModels.removeAll { $0.job.id == vm.job.id }
+        ActiveJobsRegistry.shared.unregister(vm.job.workDir)
+        try? FileManager.default.removeItem(at: vm.job.workDir)
+    }
+
+    private func deleteJobs(at offsets: IndexSet) {
+        for vm in offsets.map({ jobViewModels[$0] }) {
+            deleteJob(vm)
+        }
+    }
+
+    private func deleteSelectedJob() {
+        guard let id = selectedID, let vm = jobViewModels.first(where: { $0.job.id == id }) else { return }
+        deleteJob(vm)
+    }
+
+    private func clearFailedJobs() {
+        for vm in jobViewModels.filter({ $0.job.state.isFailed }) {
+            deleteJob(vm)
+        }
+    }
 }
 
 private struct JobRow: View {
@@ -64,10 +121,10 @@ private struct JobRow: View {
                 viewModel.job.title.isEmpty
                     ? viewModel.job.originalURL.lastPathComponent : viewModel.job.title
             )
-            .font(.headline)
+            .font(.system(.headline, design: .serif))
             .lineLimit(1)
             Text(statusText)
-                .font(.caption)
+                .font(.system(.caption, design: .serif))
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
         }
