@@ -13,6 +13,21 @@ enum JobFileManagerError: Error, LocalizedError {
 }
 
 enum JobFileManager {
+    private static let metadataFilename = ".bard-job.json"
+
+    /// Persists a job's identity into its working directory so it can be recognized
+    /// and restored on the next launch if Bard quits before the job finishes.
+    static func saveMetadata(_ metadata: JobMetadata, in workDir: URL) {
+        guard let data = try? JSONEncoder().encode(metadata) else { return }
+        try? data.write(to: workDir.appendingPathComponent(metadataFilename))
+    }
+
+    static func loadMetadata(from workDir: URL) -> JobMetadata? {
+        let url = workDir.appendingPathComponent(metadataFilename)
+        guard let data = try? Data(contentsOf: url) else { return nil }
+        return try? JSONDecoder().decode(JobMetadata.self, from: data)
+    }
+
     static func createJob(for sourceURL: URL) throws -> (workDir: URL, copiedSource: URL) {
         let fm = FileManager.default
         let appSupport = try fm.url(

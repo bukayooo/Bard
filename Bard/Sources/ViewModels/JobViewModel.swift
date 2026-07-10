@@ -12,6 +12,11 @@ final class JobViewModel {
     var sentencePauseMs: Int
     var paragraphPauseMs: Int
 
+    /// Chosen once per job (not once per synthesis run) so retrying the same job
+    /// after a cancel doesn't change its GIF; the rotation only advances when a
+    /// new job is created, so consecutive books don't show the same one twice.
+    let synthesisGIFName = SynthesisGIFLibrary.nextFilename()
+
     private var processHandle: ProcessHandleBox?
     private var userCancelled = false
     /// Modification date of job.txtURL as of our last write/read from Bard's side,
@@ -66,6 +71,10 @@ final class JobViewModel {
     // MARK: - Stage 1: extraction / OCR
 
     func beginExtraction() async {
+        // Written now (not just on success) so a crash mid-extraction still leaves
+        // enough on disk to recognize this directory as an interrupted job on the
+        // next launch, rather than an unidentifiable orphan.
+        persistMetadata()
         job.state = .extracting(detail: "Starting…")
         do {
             switch job.kind {
@@ -77,10 +86,18 @@ final class JobViewModel {
                 try extractPlainText()
             }
             job.state = .readyForReview
+            persistMetadata()
         } catch {
             job.appendLog("Error: \(error.localizedDescription)")
             job.state = .failed(error.localizedDescription)
         }
+    }
+
+    private func persistMetadata() {
+        let metadata = JobMetadata(
+            kind: job.kind, originalFilename: job.originalURL.lastPathComponent,
+            title: job.title, author: job.author)
+        JobFileManager.saveMetadata(metadata, in: job.workDir)
     }
 
     private var sourceInWorkDir: URL {
@@ -214,6 +231,40 @@ final class JobViewModel {
         lastDiskSyncDate = modificationDate(of: txtURL)
     }
 
+    // MARK: - Text cleanup (Review stage)
+
+    var isCleaningUpText = false
+    var cleanupStatus: String?
+    var cleanupError: String?
+
+    /// Runs the in-app editable text through TextCleanupService: fixes
+    /// extraction-artifact formatting and translates/modernizes it if it's
+    /// entirely non-English or archaic-spelled English. Unlike PDF extraction,
+    /// epub/txt sources never involve an LLM on their own, so this is opt-in
+    /// via the Review screen's Cleanup button rather than automatic.
+    func cleanUpText() async {
+        guard let apiKey = KeychainStore.load(), !apiKey.isEmpty else {
+            cleanupError = "No Mistral API key set. Add one in Settings to use Cleanup."
+            return
+        }
+        isCleaningUpText = true
+        cleanupError = nil
+        cleanupStatus = "Starting…"
+        do {
+            let service = try TextCleanupService(apiKey: apiKey)
+            let cleaned = try await service.cleanUp(text: editableText) { [weak self] completed, total in
+                Task { @MainActor in
+                    self?.cleanupStatus = "Cleaning up… \(completed)/\(total)"
+                }
+            }
+            editableText = cleaned
+        } catch {
+            cleanupError = error.localizedDescription
+        }
+        isCleaningUpText = false
+        cleanupStatus = nil
+    }
+
     private func modificationDate(of url: URL) -> Date? {
         (try? FileManager.default.attributesOfItem(atPath: url.path))?[.modificationDate] as? Date
     }
@@ -286,6 +337,15 @@ final class JobViewModel {
             let exported = try JobFileManager.exportOutput(
                 m4bURL, title: exportTitle, to: AppSettings.shared.outputFolderURL)
             job.outputURL = exported
+            // The working directory (source file, extracted text, cover, per-chapter
+            // audio, and the pre-export copy of the m4b) is now a pure duplicate of
+            // what's in the export folder — remove it so completed jobs don't linger
+            // in Application Support and so a later launch doesn't mistake this
+            // directory for an interrupted job. Done before marking the job .done so
+            // a crash in between can't leave a "resumable-looking" directory for a
+            // book that's actually already finished.
+            ActiveJobsRegistry.shared.unregister(job.workDir)
+            try? FileManager.default.removeItem(at: job.workDir)
             job.state = .done
             if !NSApp.isActive {
                 NotificationService.notifyAudiobookReady(title: exportTitle)
@@ -412,5 +472,80 @@ final class JobViewModel {
 
         maxObservedFraction = max(maxObservedFraction, raw)
         return maxObservedFraction
+    }
+}
+
+// MARK: - Restoring an interrupted job at launch
+
+extension JobViewModel {
+    /// Reconstructs a job from a leftover working directory found under
+    /// Application Support/Bard/Jobs at launch. Since a completed job's directory
+    /// is deleted right after export (see startSynthesis above), anything still
+    /// there is by definition a job that never finished — Bard quit or crashed
+    /// mid-extraction or mid-synthesis. Returns nil if the directory has no
+    /// metadata file (predates this feature, or was never a real job dir), in
+    /// which case it's left for Settings' "Clean Up Old Files" to deal with.
+    static func restoring(from workDir: URL) -> JobViewModel? {
+        guard let metadata = JobFileManager.loadMetadata(from: workDir) else { return nil }
+        let originalURL = workDir.appendingPathComponent(metadata.originalFilename)
+        let job = Job(kind: metadata.kind, originalURL: originalURL, workDir: workDir)
+        if !metadata.title.isEmpty { job.title = metadata.title }
+        job.author = metadata.author
+        let vm = JobViewModel(job: job)
+
+        if let txtURL = resumableTxtURL(
+            kind: metadata.kind, workDir: workDir, originalFilename: metadata.originalFilename)
+        {
+            job.txtURL = txtURL
+            job.coverURL = resumableCoverURL(
+                kind: metadata.kind, workDir: workDir, originalFilename: metadata.originalFilename)
+            vm.coverPreviewURL = job.coverURL
+            vm.reloadFromDisk()
+            job.state = .readyForReview
+        } else {
+            // Extraction itself never finished — for a PDF that may mean OCR calls
+            // already happened but got no further, so this deliberately doesn't
+            // silently redo work (which could burn API credits again); the user
+            // decides whether to delete and re-add the source file.
+            job.state = .failed(
+                "Bard quit before \"\(metadata.originalFilename)\" finished extracting. "
+                    + "Delete this and re-add the file to try again.")
+        }
+        return vm
+    }
+
+    /// Where extraction leaves the book's text, by source kind — mirrors the
+    /// naming each extract* method above actually uses.
+    private static func resumableTxtURL(kind: SourceKind, workDir: URL, originalFilename: String) -> URL? {
+        let candidate: URL
+        switch kind {
+        case .epub:
+            candidate =
+                workDir.appendingPathComponent(originalFilename)
+                .deletingPathExtension().appendingPathExtension("txt")
+        case .pdf:
+            candidate = workDir.appendingPathComponent("book.txt")
+        case .txt:
+            candidate = workDir.appendingPathComponent(originalFilename)
+        }
+        return FileManager.default.fileExists(atPath: candidate.path) ? candidate : nil
+    }
+
+    /// A user-chosen cover (any kind) and a PDF's default first-page cover are both
+    /// always written as "cover.<ext>"; only an epub's auto-extracted cover keeps
+    /// the epub's own basename. Prefer the former since it reflects a deliberate
+    /// choice made after extraction.
+    private static func resumableCoverURL(kind: SourceKind, workDir: URL, originalFilename: String) -> URL? {
+        let fm = FileManager.default
+        if let entries = try? fm.contentsOfDirectory(at: workDir, includingPropertiesForKeys: nil),
+            let userChosen = entries.first(where: { $0.deletingPathExtension().lastPathComponent == "cover" })
+        {
+            return userChosen
+        }
+        guard kind == .epub else { return nil }
+        let extracted =
+            workDir.appendingPathComponent(originalFilename)
+            .deletingPathExtension().appendingPathExtension("png")
+        return fm.fileExists(atPath: extracted.path) ? extracted : nil
     }
 }

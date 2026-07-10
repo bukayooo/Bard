@@ -12,10 +12,12 @@
 		084992334180B6D8C1F5535F /* JobViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4157FD76F6B27AA078CB81EB /* JobViewModel.swift */; };
 		0C1F5C6E44B290EEB94BD939 /* ExtractionProgressView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBAE1BF82BE459E02328235B /* ExtractionProgressView.swift */; };
 		13FB624D397A82C5C884CE83 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE12C652432416582683F940 /* ContentView.swift */; };
+		1BD4CE8ED5E7D5F3D1E150B4 /* zoopraxography-fan-flirtation.gif in Resources */ = {isa = PBXBuildFile; fileRef = B323B87DFFE28EB67978E6D5 /* zoopraxography-fan-flirtation.gif */; };
 		21E073994A0DDDBBF9AD89CD /* DropZoneView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0C1B5F9999C83E59D9E4476 /* DropZoneView.swift */; };
 		28C16446BFF3329C96B18DAB /* SettingsViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E394A678E3817FDD00D12BB /* SettingsViewModel.swift */; };
 		292AEF8345D392335CC7563E /* JobFileManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 574F3F62BE9461385488306E /* JobFileManager.swift */; };
 		2B3EC00664D84E3F23E9DE46 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 5F48ABC91C6889F0D8759F75 /* Assets.xcassets */; };
+		3C749BFF5BE808E021072A0F /* zoopraxography-grecian-dancing-girls.gif in Resources */ = {isa = PBXBuildFile; fileRef = CB2B822AC48A74D32C0E22C6 /* zoopraxography-grecian-dancing-girls.gif */; };
 		3D0C9DB54B95509E79C7A2B7 /* SynthesisProgressView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 54D353499606ECE970942EB4 /* SynthesisProgressView.swift */; };
 		3E1A0BEEB351B7CC88561A2A /* KeychainStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2064F9AD97CBB1D98A24784 /* KeychainStore.swift */; };
 		48C6E51A6E613D3ED9BF0C92 /* BookProgressEstimator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 883A8853FB4DE359E4C69DA6 /* BookProgressEstimator.swift */; };
@@ -25,14 +27,19 @@
 		510665161C623822112F3FBB /* PDFSplitter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F0BFD9DD8785388E9AC632C /* PDFSplitter.swift */; };
 		8D8BCFFEEC31F7407F077663 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = E4AB4F741DB1108379A5F905 /* Theme.swift */; };
 		96B1388F2A15D4D583C56A4F /* JobDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2FB017C7BB12F4D0BB63C6B /* JobDetailView.swift */; };
+		9CAF5B274F3F0FED71C735F1 /* pottery-scholar.gif in Resources */ = {isa = PBXBuildFile; fileRef = 2E7242002BDD4E96AA47CEE4 /* pottery-scholar.gif */; };
 		AB7177EA32BDDC937E375F22 /* Job.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B1BBD86C264CD50BE695ADC /* Job.swift */; };
 		B0733D9D72B86B12FD2F28AB /* MistralOCRService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 847A117FF5109AE1A5447CBD /* MistralOCRService.swift */; };
+		B49A6CD94AEDD6862D976B44 /* GIFPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50688BA27ADCEF8DFA548F07 /* GIFPlayer.swift */; };
+		C4DF0D0BA92A9319807B9B4E /* pottery-runners.gif in Resources */ = {isa = PBXBuildFile; fileRef = 53CD4FA68D545BBBD13C8615 /* pottery-runners.gif */; };
 		CD64B5C1EBD9421A37418ABB /* Epub2TTSRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = D85BDF6466B08E15EC380CAA /* Epub2TTSRunner.swift */; };
 		CE33E2553C1EC57CA8AEA849 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B9DA7F9D0ADCA1BDB22F05A /* SettingsView.swift */; };
 		CE9F4DE0435EA69ABCEE81BD /* ReviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02800764DC23B484E65BE5D8 /* ReviewView.swift */; };
 		D66D7652F643A06A30CBC88D /* LogView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1E6853063AD3DB1A6BC5D92 /* LogView.swift */; };
 		DB3B9620D1B998D95B4D73BB /* AppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8F0203568F0CCF35944D66B /* AppSettings.swift */; };
+		E6CBAFF69380DA450D6AEDF6 /* TextCleanupService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D327B6214B9347F8DD2FA56 /* TextCleanupService.swift */; };
 		E8B734665DDE9D667F4032F5 /* NotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 55BA06EDF10F5B642E97723F /* NotificationService.swift */; };
+		F0296CB82963118553D399B1 /* JobMetadata.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB7E7737471F45AA9BD268F8 /* JobMetadata.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -41,8 +48,12 @@
 		0B9DA7F9D0ADCA1BDB22F05A /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		0D6C53D02BDE3E0982B84171 /* ActiveJobsRegistry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActiveJobsRegistry.swift; sourceTree = "<group>"; };
 		20BB122E1FC6F3B7D893AB28 /* DoneView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DoneView.swift; sourceTree = "<group>"; };
+		2E7242002BDD4E96AA47CEE4 /* pottery-scholar.gif */ = {isa = PBXFileReference; lastKnownFileType = image.gif; path = "pottery-scholar.gif"; sourceTree = "<group>"; };
 		3587BC67D702B7EB3E69F5D0 /* ocrschema.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = ocrschema.json; sourceTree = "<group>"; };
+		3D327B6214B9347F8DD2FA56 /* TextCleanupService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextCleanupService.swift; sourceTree = "<group>"; };
 		4157FD76F6B27AA078CB81EB /* JobViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JobViewModel.swift; sourceTree = "<group>"; };
+		50688BA27ADCEF8DFA548F07 /* GIFPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GIFPlayer.swift; sourceTree = "<group>"; };
+		53CD4FA68D545BBBD13C8615 /* pottery-runners.gif */ = {isa = PBXFileReference; lastKnownFileType = image.gif; path = "pottery-runners.gif"; sourceTree = "<group>"; };
 		54D353499606ECE970942EB4 /* SynthesisProgressView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SynthesisProgressView.swift; sourceTree = "<group>"; };
 		55BA06EDF10F5B642E97723F /* NotificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationService.swift; sourceTree = "<group>"; };
 		574F3F62BE9461385488306E /* JobFileManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JobFileManager.swift; sourceTree = "<group>"; };
@@ -55,8 +66,11 @@
 		AE12C652432416582683F940 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		B0C1B5F9999C83E59D9E4476 /* DropZoneView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DropZoneView.swift; sourceTree = "<group>"; };
 		B1E6853063AD3DB1A6BC5D92 /* LogView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogView.swift; sourceTree = "<group>"; };
+		B323B87DFFE28EB67978E6D5 /* zoopraxography-fan-flirtation.gif */ = {isa = PBXFileReference; lastKnownFileType = image.gif; path = "zoopraxography-fan-flirtation.gif"; sourceTree = "<group>"; };
 		B8F0203568F0CCF35944D66B /* AppSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettings.swift; sourceTree = "<group>"; };
+		BB7E7737471F45AA9BD268F8 /* JobMetadata.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JobMetadata.swift; sourceTree = "<group>"; };
 		BBAE1BF82BE459E02328235B /* ExtractionProgressView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExtractionProgressView.swift; sourceTree = "<group>"; };
+		CB2B822AC48A74D32C0E22C6 /* zoopraxography-grecian-dancing-girls.gif */ = {isa = PBXFileReference; lastKnownFileType = image.gif; path = "zoopraxography-grecian-dancing-girls.gif"; sourceTree = "<group>"; };
 		D1BA498DEBBF21429435E7EF /* Bard.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Bard.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		D74EA08EA0BF5F7D2443497C /* JobState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JobState.swift; sourceTree = "<group>"; };
 		D85BDF6466B08E15EC380CAA /* Epub2TTSRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Epub2TTSRunner.swift; sourceTree = "<group>"; };
@@ -79,6 +93,7 @@
 			children = (
 				5F48ABC91C6889F0D8759F75 /* Assets.xcassets */,
 				3587BC67D702B7EB3E69F5D0 /* ocrschema.json */,
+				BD0121DF91BE4DD74B11140F /* GIFs */,
 			);
 			path = Resources;
 			sourceTree = "<group>";
@@ -96,6 +111,7 @@
 			children = (
 				B8F0203568F0CCF35944D66B /* AppSettings.swift */,
 				0B1BBD86C264CD50BE695ADC /* Job.swift */,
+				BB7E7737471F45AA9BD268F8 /* JobMetadata.swift */,
 				D74EA08EA0BF5F7D2443497C /* JobState.swift */,
 			);
 			path = Models;
@@ -116,13 +132,26 @@
 				0D6C53D02BDE3E0982B84171 /* ActiveJobsRegistry.swift */,
 				883A8853FB4DE359E4C69DA6 /* BookProgressEstimator.swift */,
 				D85BDF6466B08E15EC380CAA /* Epub2TTSRunner.swift */,
+				50688BA27ADCEF8DFA548F07 /* GIFPlayer.swift */,
 				574F3F62BE9461385488306E /* JobFileManager.swift */,
 				E2064F9AD97CBB1D98A24784 /* KeychainStore.swift */,
 				847A117FF5109AE1A5447CBD /* MistralOCRService.swift */,
 				55BA06EDF10F5B642E97723F /* NotificationService.swift */,
 				7F0BFD9DD8785388E9AC632C /* PDFSplitter.swift */,
+				3D327B6214B9347F8DD2FA56 /* TextCleanupService.swift */,
 			);
 			path = Services;
+			sourceTree = "<group>";
+		};
+		BD0121DF91BE4DD74B11140F /* GIFs */ = {
+			isa = PBXGroup;
+			children = (
+				53CD4FA68D545BBBD13C8615 /* pottery-runners.gif */,
+				2E7242002BDD4E96AA47CEE4 /* pottery-scholar.gif */,
+				B323B87DFFE28EB67978E6D5 /* zoopraxography-fan-flirtation.gif */,
+				CB2B822AC48A74D32C0E22C6 /* zoopraxography-grecian-dancing-girls.gif */,
+			);
+			path = GIFs;
 			sourceTree = "<group>";
 		};
 		CAFDD0A28904FF5FE1CC4FDE /* Views */ = {
@@ -225,6 +254,10 @@
 			files = (
 				2B3EC00664D84E3F23E9DE46 /* Assets.xcassets in Resources */,
 				4EFE37532D2D15BCEE802C6C /* ocrschema.json in Resources */,
+				C4DF0D0BA92A9319807B9B4E /* pottery-runners.gif in Resources */,
+				9CAF5B274F3F0FED71C735F1 /* pottery-scholar.gif in Resources */,
+				1BD4CE8ED5E7D5F3D1E150B4 /* zoopraxography-fan-flirtation.gif in Resources */,
+				3C749BFF5BE808E021072A0F /* zoopraxography-grecian-dancing-girls.gif in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -244,9 +277,11 @@
 				21E073994A0DDDBBF9AD89CD /* DropZoneView.swift in Sources */,
 				CD64B5C1EBD9421A37418ABB /* Epub2TTSRunner.swift in Sources */,
 				0C1F5C6E44B290EEB94BD939 /* ExtractionProgressView.swift in Sources */,
+				B49A6CD94AEDD6862D976B44 /* GIFPlayer.swift in Sources */,
 				AB7177EA32BDDC937E375F22 /* Job.swift in Sources */,
 				96B1388F2A15D4D583C56A4F /* JobDetailView.swift in Sources */,
 				292AEF8345D392335CC7563E /* JobFileManager.swift in Sources */,
+				F0296CB82963118553D399B1 /* JobMetadata.swift in Sources */,
 				49DF308226DACBDA68CE71E2 /* JobState.swift in Sources */,
 				084992334180B6D8C1F5535F /* JobViewModel.swift in Sources */,
 				3E1A0BEEB351B7CC88561A2A /* KeychainStore.swift in Sources */,
@@ -258,6 +293,7 @@
 				CE33E2553C1EC57CA8AEA849 /* SettingsView.swift in Sources */,
 				28C16446BFF3329C96B18DAB /* SettingsViewModel.swift in Sources */,
 				3D0C9DB54B95509E79C7A2B7 /* SynthesisProgressView.swift in Sources */,
+				E6CBAFF69380DA450D6AEDF6 /* TextCleanupService.swift in Sources */,
 				8D8BCFFEEC31F7407F077663 /* Theme.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

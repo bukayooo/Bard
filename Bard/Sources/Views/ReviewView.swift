@@ -12,6 +12,26 @@ struct ReviewView: View {
                 HStack {
                     SectionLabel(text: "Extracted Text")
                     Spacer()
+                    if viewModel.isCleaningUpText {
+                        ProgressView()
+                            .controlSize(.small)
+                        Text(viewModel.cleanupStatus ?? "Cleaning up…")
+                            .font(.system(.caption, design: .serif))
+                            .foregroundStyle(.secondary)
+                    } else {
+                        Button {
+                            Task { await viewModel.cleanUpText() }
+                        } label: {
+                            Label("Cleanup", systemImage: "wand.and.stars")
+                        }
+                        .buttonStyle(.borderless)
+                        .foregroundStyle(BardTheme.terracotta)
+                        .disabled(viewModel.editableText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        .help(
+                            "Use AI to fix formatting issues from extraction and translate/modernize "
+                                + "text that's entirely in another language or archaic spelling "
+                                + "(uses your Mistral API key)")
+                    }
                     Button {
                         viewModel.reloadFromDisk()
                     } label: {
@@ -35,11 +55,19 @@ struct ReviewView: View {
                 .padding(.horizontal, 14)
                 .padding(.top, 12)
                 .padding(.bottom, 6)
+                if let cleanupError = viewModel.cleanupError {
+                    Text(cleanupError)
+                        .font(.system(.caption, design: .serif))
+                        .foregroundStyle(.red)
+                        .padding(.horizontal, 14)
+                        .padding(.bottom, 6)
+                }
                 TextEditor(text: $viewModel.editableText)
                     .font(.system(.body, design: .monospaced))
                     .scrollContentBackground(.hidden)
                     .padding(.horizontal, 10)
                     .padding(.bottom, 10)
+                    .disabled(viewModel.isCleaningUpText)
             }
             .frame(minWidth: 360)
 

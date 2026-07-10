@@ -48,7 +48,13 @@ private struct ChatResponse: Decodable {
 ///  3. A cleanup chat call *per page* that edits the real OCR text in place
 ///     (strip footnotes/margins, mark chapter headings) rather than
 ///     generating it from scratch. Keeping chunks to a single page bounds
-///     how much the model can drift per call.
+///     how much the model can drift per call. The one deliberate exception to
+///     "edit in place" is translation: a page that is entirely non-English or
+///     entirely archaic-spelled English (Middle/Early Modern English, which
+///     the TTS voice mispronounces) gets translated/modernized wholesale,
+///     since per-page granularity is exactly what lets the model tell "whole
+///     page in another language/era" apart from "a quotation embedded in an
+///     English page" and leave the latter untouched.
 struct MistralOCRService: Sendable {
     static let ocrEndpoint = URL(string: "https://api.mistral.ai/v1/ocr")!
     static let chatEndpoint = URL(string: "https://api.mistral.ai/v1/chat/completions")!
@@ -72,26 +78,40 @@ struct MistralOCRService: Sendable {
     static let cleanupPrompt = """
         You are cleaning up raw OCR text from a single page of a book. The running headers \
         and footers have already been stripped out programmatically - you do not need to \
-        look for those. Your only two jobs are: (1) remove footnotes, footnote reference \
-        markers (e.g. superscript numbers like [1]), and margin line/page numbers; (2) if \
-        this page begins a new chapter, put "# " before that chapter title line. Everything \
-        else must be reproduced exactly word-for-word, in the original reading order.
+        look for those. Your jobs are: (1) remove footnotes, footnote reference markers \
+        (e.g. superscript numbers like [1]), and margin line/page numbers; (2) if this page \
+        begins a new chapter, put "# " before that chapter title line; (3) if this page's \
+        body text is written ENTIRELY in a non-English language, or entirely in archaic \
+        English spelling/vocabulary that a modern text-to-speech voice would mispronounce \
+        (e.g. Middle or Early Modern English like "vnderstand" for "understand", "historie" \
+        for "history", "sayth" for "says"), translate/modernize the WHOLE page into fluent \
+        modern English, keeping the original meaning, sentence order, and paragraph breaks \
+        as close as possible. Otherwise - meaning any page that is normal modern English, or \
+        modern English with only a portion (a quotation, an epigraph, a foreign phrase) in \
+        another language or archaic spelling - leave every word exactly as it appears \
+        (including that non-English/archaic portion): the author is likely quoting or \
+        referencing something deliberately, and only a page that is uniformly foreign or \
+        archaic should be translated.
 
         Critical rules:
-        - Never invent, complete, paraphrase, reword, or summarize any text. Every word you \
-        output must come directly from the input.
+        - Outside of the whole-page translation/modernization case in (3) above, never \
+        invent, complete, paraphrase, reword, or summarize any text. Every word you output \
+        must come directly from the input.
         - Never omit a sentence, clause, or line of body text.
         - This page is a fragment of a much longer book, so it will often start or end \
-        mid-sentence. That is expected - keep the partial sentence exactly as it appears, \
-        don't drop it and don't try to complete it.
+        mid-sentence. That is expected - keep the partial sentence exactly as it appears \
+        (translated if rule 3 applies), don't drop it and don't try to complete it.
         - If you're unsure whether a piece of text is a footnote/margin number or actual \
         body content, keep it. Deleting real content is a worse mistake than leaving in a \
         stray number.
+        - If you're unsure whether a page qualifies for whole-page translation under rule \
+        (3), don't translate it - leave it exactly as-is. Only translate when the entire \
+        page is clearly non-English or clearly archaic-spelled English.
         - If the page truly has no body text at all (e.g. blank or purely decorative), reply \
         with an empty string.
 
-        Reply with only the cleaned text and nothing else - no preamble, no explanation, no \
-        code fences.
+        Reply with only the cleaned (and, if applicable, translated) text and nothing else - \
+        no preamble, no explanation, no code fences.
         """
 
     static let frontMatterPrompt = """

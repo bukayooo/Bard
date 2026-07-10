@@ -3,7 +3,7 @@ import SwiftUI
 struct ContentView: View {
     @State private var jobViewModels: [JobViewModel] = []
     @State private var selectedID: UUID?
-    @State private var columnVisibility: NavigationSplitViewVisibility = .all
+    @State private var columnVisibility: NavigationSplitViewVisibility = .detailOnly
 
     var body: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
@@ -57,6 +57,22 @@ struct ContentView: View {
                     startJob(with: url)
                 }
             }
+        }
+        .task {
+            restoreIncompleteJobs()
+        }
+    }
+
+    /// Repopulates the sidebar with any job directories left over from a previous
+    /// launch that never finished (Bard quit or crashed mid-extraction or
+    /// mid-synthesis) — completed jobs delete their own working directory right
+    /// after export, so anything found here is inherently incomplete and worth
+    /// surfacing rather than silently discarding.
+    private func restoreIncompleteJobs() {
+        for dir in JobFileManager.orphanedJobDirs(excluding: []) {
+            guard let vm = JobViewModel.restoring(from: dir) else { continue }
+            ActiveJobsRegistry.shared.register(dir)
+            jobViewModels.append(vm)
         }
     }
 
