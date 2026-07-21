@@ -5,6 +5,7 @@ import UniformTypeIdentifiers
 struct ReviewView: View {
     @Bindable var viewModel: JobViewModel
     @State private var voices: [String] = AppSettings.fallbackVoices
+    @State private var isCoverDropTargeted = false
 
     var body: some View {
         HSplitView {
@@ -100,21 +101,32 @@ struct ReviewView: View {
     private var coverSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             SectionLabel(text: "Cover")
-            if let coverURL = viewModel.coverPreviewURL, let image = NSImage(contentsOf: coverURL) {
-                Image(nsImage: image)
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(height: 160)
-                    .clipShape(RoundedRectangle(cornerRadius: 6))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 6)
-                            .strokeBorder(BardTheme.terracottaDeep.opacity(0.4), lineWidth: 1)
-                    )
-            } else {
+            Group {
+                if let coverURL = viewModel.coverPreviewURL, let image = NSImage(contentsOf: coverURL) {
+                    Image(nsImage: image)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(height: 160)
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                } else {
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(Color.secondary.opacity(0.12))
+                        .frame(height: 160)
+                        .overlay(Text("No cover").foregroundStyle(.secondary))
+                }
+            }
+            .overlay(
                 RoundedRectangle(cornerRadius: 6)
-                    .fill(Color.secondary.opacity(0.12))
-                    .frame(height: 160)
-                    .overlay(Text("No cover").foregroundStyle(.secondary))
+                    .strokeBorder(
+                        isCoverDropTargeted ? BardTheme.terracotta : BardTheme.terracottaDeep.opacity(0.4),
+                        lineWidth: isCoverDropTargeted ? 2 : 1)
+            )
+            .dropDestination(for: URL.self) { items, _ in
+                guard let url = items.first(where: isImageFile) else { return false }
+                viewModel.chooseCoverImage(url: url)
+                return true
+            } isTargeted: { targeted in
+                isCoverDropTargeted = targeted
             }
             if viewModel.job.kind == .pdf {
                 Button("Use First Page of PDF") {
@@ -159,5 +171,10 @@ struct ReviewView: View {
         if panel.runModal() == .OK, let url = panel.url {
             viewModel.chooseCoverImage(url: url)
         }
+    }
+
+    private func isImageFile(_ url: URL) -> Bool {
+        guard let type = UTType(filenameExtension: url.pathExtension) else { return false }
+        return type.conforms(to: .image)
     }
 }
