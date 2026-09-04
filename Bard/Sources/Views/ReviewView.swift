@@ -148,6 +148,8 @@ struct ReviewView: View {
                 }
             }
             .labelsHidden()
+            Link("Listen to voice samples", destination: URL(string: "https://geeksta.net/tools/tts-samples/")!)
+                .font(.system(.caption, design: .serif))
         }
     }
 

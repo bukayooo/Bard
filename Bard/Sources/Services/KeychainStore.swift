@@ -6,7 +6,7 @@ enum KeychainStore {
     private static let account = "mistral"
 
     static func save(apiKey: String) {
-        let data = Data(apiKey.utf8)
+        let data = Data(apiKey.trimmingCharacters(in: .whitespacesAndNewlines).utf8)
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -29,7 +29,7 @@ enum KeychainStore {
         var result: AnyObject?
         let status = SecItemCopyMatching(query as CFDictionary, &result)
         guard status == errSecSuccess, let data = result as? Data else { return nil }
-        return String(data: data, encoding: .utf8)
+        return String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     static func delete() {

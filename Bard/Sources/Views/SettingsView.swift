@@ -52,6 +52,8 @@ struct SettingsView: View {
                         Text(voice).tag(voice)
                     }
                 }
+                Link("Listen to voice samples", destination: URL(string: "https://geeksta.net/tools/tts-samples/")!)
+                    .font(.system(.caption, design: .serif))
                 Stepper(
                     "Sentence pause: \(viewModel.sentencePauseMs) ms",
                     value: $viewModel.sentencePauseMs, in: 0...5000, step: 100)
