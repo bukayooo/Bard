@@ -1,10 +1,20 @@
 import Foundation
+import os
 
 enum MistralOCRError: Error, LocalizedError {
     case missingAPIKey
     case httpError(Int, String)
     case emptyResponse
     case decodeFailed(String)
+    /// Distinct from `.httpError` for the specific case of exhausting every
+    /// rate-limit retry (see `maxRateLimitRetries`) without Mistral ever
+    /// sending a `Retry-After` header. A transient traffic-driven 429 almost
+    /// always includes one; several minutes of unbroken 429s with none is a
+    /// much stronger signal of an account-level block (e.g. an unverified
+    /// free-tier key that hasn't been granted completions access) than of a
+    /// busy API, so this gets its own message pointing at the account
+    /// instead of implying "just try again."
+    case persistentRateLimit(attempts: Int, elapsed: TimeInterval)
 
     var errorDescription: String? {
         switch self {
@@ -12,6 +22,12 @@ enum MistralOCRError: Error, LocalizedError {
         case .httpError(let code, let body): return "Mistral request failed (\(code)): \(body)"
         case .emptyResponse: return "Mistral returned an empty response."
         case .decodeFailed(let msg): return "Could not parse Mistral response: \(msg)"
+        case .persistentRateLimit(let attempts, let elapsed):
+            let minutes = Int(elapsed / 60)
+            return "Mistral rate-limited every request for \(minutes) minute\(minutes == 1 ? "" : "s") straight "
+                + "across \(attempts) attempts, with no Retry-After guidance from the server. That usually means "
+                + "your Mistral account doesn't have completions access yet (e.g. an unverified free-tier key), "
+                + "not a brief traffic spike — check console.mistral.ai under Limits and Subscription."
         }
     }
 }
@@ -327,11 +343,23 @@ struct MistralOCRService: Sendable {
     /// 429s need much more patience than transient network/5xx errors: with a
     /// page-per-request cleanup pass, a longer book can throw dozens of
     /// concurrent requests at the API, so a single 2s retry isn't enough to
-    /// ride out a rate-limit window.
-    static let maxRateLimitRetries = 6
+    /// ride out a rate-limit window. Worst case (no Retry-After header, every
+    /// attempt maxing out the backoff) is now ~9 minutes of total waiting
+    /// before giving up, versus ~2 minutes before.
+    static let maxRateLimitRetries = 9
     static let maxTransientRetries = 1
 
-    private func post(to url: URL, body: [String: Any], attempt: Int) async throws -> Data {
+    /// Surfaced 429s give no visibility into whether the retry loop actually
+    /// ran, how long it waited, or what Retry-After said — logged here (via
+    /// Console.app, not just Xcode's console, since this app is usually run
+    /// standalone) so a failure can be diagnosed after the fact instead of
+    /// guessed at.
+    private static let logger = Logger(subsystem: "com.bard.Bard", category: "MistralOCR")
+
+    private func post(
+        to url: URL, body: [String: Any], attempt: Int,
+        startedAt: Date = Date(), sawRetryAfter: Bool = false
+    ) async throws -> Data {
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -346,7 +374,10 @@ struct MistralOCRService: Sendable {
         } catch {
             if attempt < Self.maxTransientRetries {
                 try await Task.sleep(nanoseconds: 2_000_000_000)
-                return try await post(to: url, body: body, attempt: attempt + 1)
+                return try await post(
+                    to: url, body: body, attempt: attempt + 1,
+                    startedAt: startedAt, sawRetryAfter: sawRetryAfter
+                )
             }
             throw MistralOCRError.decodeFailed(error.localizedDescription)
         }
@@ -359,13 +390,43 @@ struct MistralOCRService: Sendable {
             if http.statusCode == 429, attempt < Self.maxRateLimitRetries {
                 let retryAfter = (response as? HTTPURLResponse)?
                     .value(forHTTPHeaderField: "Retry-After").flatMap(Double.init)
-                let backoff = retryAfter ?? min(60, pow(2, Double(attempt + 1)))
-                try await Task.sleep(nanoseconds: UInt64(backoff * 1_000_000_000))
-                return try await post(to: url, body: body, attempt: attempt + 1)
+                let backoff = retryAfter ?? min(90, pow(2, Double(attempt + 1)))
+                // Jitter on top of the base backoff: cleanup fires up to
+                // maxConcurrentCleanupChunks requests per batch, so when a
+                // whole batch gets 429'd together they'd otherwise all sleep
+                // for the same duration and retry in lockstep, colliding
+                // again on the very next attempt.
+                let jitter = Double.random(in: 0...1.5)
+                let sleepSeconds = backoff + jitter
+                let retryAfterDescription = retryAfter.map { "\($0)" } ?? "none"
+                Self.logger.warning(
+                    "429 on \(url.lastPathComponent, privacy: .public) (attempt \(attempt + 1, privacy: .public)/\(Self.maxRateLimitRetries, privacy: .public)), retry-after header=\(retryAfterDescription, privacy: .public), sleeping \(sleepSeconds, format: .fixed(precision: 1), privacy: .public)s"
+                )
+                try await Task.sleep(nanoseconds: UInt64(sleepSeconds * 1_000_000_000))
+                return try await post(
+                    to: url, body: body, attempt: attempt + 1,
+                    startedAt: startedAt, sawRetryAfter: sawRetryAfter || retryAfter != nil
+                )
             }
             if http.statusCode >= 500, attempt < Self.maxTransientRetries {
                 try await Task.sleep(nanoseconds: 2_000_000_000)
-                return try await post(to: url, body: body, attempt: attempt + 1)
+                return try await post(
+                    to: url, body: body, attempt: attempt + 1,
+                    startedAt: startedAt, sawRetryAfter: sawRetryAfter
+                )
+            }
+            if http.statusCode == 429 {
+                let elapsed = Date().timeIntervalSince(startedAt)
+                Self.logger.error(
+                    "Giving up on \(url.lastPathComponent, privacy: .public) after \(attempt + 1, privacy: .public) attempts, still 429"
+                )
+                // A real traffic-driven rate limit almost always tells you
+                // when to come back; minutes of 429s with no Retry-After
+                // ever, across many attempts, is the account being blocked
+                // outright rather than merely busy — see persistentRateLimit.
+                if !sawRetryAfter, attempt + 1 >= Self.maxRateLimitRetries {
+                    throw MistralOCRError.persistentRateLimit(attempts: attempt + 1, elapsed: elapsed)
+                }
             }
             throw MistralOCRError.httpError(http.statusCode, bodyText)
         }
