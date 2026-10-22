@@ -364,6 +364,18 @@ final class JobViewModel {
         stallWarning = nil
     }
 
+    /// A failed or cancelled synthesis still has its extracted text (and any
+    /// chapters epub2tts-edge already rendered) on disk, so it can go straight back
+    /// to review for a fix and retry — epub2tts-edge skips finished chapters.
+    var canReturnToReview: Bool {
+        job.state.isFailed && job.txtURL != nil
+    }
+
+    func returnToReview() {
+        guard canReturnToReview else { return }
+        job.state = .readyForReview
+    }
+
     func cancelSynthesis() {
         userCancelled = true
         let handle = processHandle

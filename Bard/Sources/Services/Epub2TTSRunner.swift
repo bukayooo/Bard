@@ -4,7 +4,7 @@ enum ProcessRunError: Error, LocalizedError {
     case binaryNotFound(String)
     case nonZeroExit(Int32, String)
     case launchFailed(String)
-    case outputMissing(String)
+    case outputMissing(String, detail: String?)
 
     var errorDescription: String? {
         switch self {
@@ -14,8 +14,9 @@ enum ProcessRunError: Error, LocalizedError {
             return "epub2tts-edge exited with code \(code).\n\(tail)"
         case .launchFailed(let msg):
             return "Failed to launch process: \(msg)"
-        case .outputMissing(let name):
-            return "Expected output file was not produced: \(name)"
+        case .outputMissing(let name, let detail):
+            guard let detail else { return "Expected output file was not produced: \(name)" }
+            return "epub2tts-edge stopped without producing \(name).\n\(detail)"
         }
     }
 }
@@ -58,7 +59,7 @@ actor Epub2TTSRunner {
         onOutputLine: @escaping @Sendable (String) -> Void
     ) async throws -> (txtURL: URL, coverURL: URL?) {
         let binary = AppSettings.shared.epub2ttsBinaryURL
-        try await runProcess(
+        let tail = try await runProcess(
             executableURL: binary, arguments: [epubURL.path], currentDirectory: workDir,
             onOutputLine: onOutputLine, handle: nil)
 
@@ -66,7 +67,8 @@ actor Epub2TTSRunner {
         let txtURL = base.appendingPathExtension("txt")
         let pngURL = base.appendingPathExtension("png")
         guard FileManager.default.fileExists(atPath: txtURL.path) else {
-            throw ProcessRunError.outputMissing(txtURL.lastPathComponent)
+            throw ProcessRunError.outputMissing(
+                txtURL.lastPathComponent, detail: Self.failureDetail(fromTail: tail))
         }
         let coverURL = FileManager.default.fileExists(atPath: pngURL.path) ? pngURL : nil
         return (txtURL, coverURL)
@@ -96,13 +98,14 @@ actor Epub2TTSRunner {
             arguments.append(contentsOf: ["--cover", coverURL.path])
         }
         let workDir = txtURL.deletingLastPathComponent()
-        try await runProcess(
+        let tail = try await runProcess(
             executableURL: binary, arguments: arguments, currentDirectory: workDir,
             onOutputLine: onOutputLine, handle: handle)
 
         let m4bURL = txtURL.deletingPathExtension().appendingPathExtension("m4b")
         guard FileManager.default.fileExists(atPath: m4bURL.path) else {
-            throw ProcessRunError.outputMissing(m4bURL.lastPathComponent)
+            throw ProcessRunError.outputMissing(
+                m4bURL.lastPathComponent, detail: Self.failureDetail(fromTail: tail))
         }
         return m4bURL
     }
@@ -237,13 +240,33 @@ actor Epub2TTSRunner {
         }
     }
 
+    /// epub2tts-edge's `run_edgespeak` gives up on a sentence edge-tts can't
+    /// synthesize (e.g. a lone "!" split off "Crash!!!", or a 403 from Microsoft)
+    /// via a bare `exit()` — status 0 — so the run looks successful apart from the
+    /// missing output. Its last retry/give-up messages are the only record of why.
+    private static func failureDetail(fromTail tail: String) -> String? {
+        let lines = tail.components(separatedBy: "\n")
+        let errorMarker = " in run_edgespeak with error: "
+        var detail: [String] = []
+        if let givingUp = lines.last(where: { $0.hasPrefix("Giving up on sentence") }) {
+            detail.append(givingUp)
+        }
+        if let attempt = lines.last(where: { $0.contains(errorMarker) }),
+            let error = attempt.components(separatedBy: errorMarker).last
+        {
+            detail.append("Last error: \(error)")
+        }
+        return detail.isEmpty ? nil : detail.joined(separator: "\n")
+    }
+
+    @discardableResult
     private func runProcess(
         executableURL: URL,
         arguments: [String],
         currentDirectory: URL,
         onOutputLine: @escaping @Sendable (String) async -> Void,
         handle: ProcessHandleBox?
-    ) async throws {
+    ) async throws -> String {
         guard FileManager.default.isExecutableFile(atPath: executableURL.path) else {
             throw ProcessRunError.binaryNotFound(executableURL.path)
         }
@@ -296,9 +319,10 @@ actor Epub2TTSRunner {
             try await group.waitForAll()
         }
 
+        let tailText = await tail.text()
         if process.terminationStatus != 0 {
-            let tailText = await tail.text()
             throw ProcessRunError.nonZeroExit(process.terminationStatus, tailText)
         }
+        return tailText
     }
 }

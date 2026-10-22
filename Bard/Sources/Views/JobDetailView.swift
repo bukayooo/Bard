@@ -15,7 +15,7 @@ struct JobDetailView: View {
             case .done:
                 DoneView(viewModel: viewModel)
             case .failed(let message):
-                FailedView(message: message)
+                FailedView(viewModel: viewModel, message: message)
             }
         }
         .navigationTitle(
@@ -25,6 +25,7 @@ struct JobDetailView: View {
 }
 
 private struct FailedView: View {
+    let viewModel: JobViewModel
     let message: String
 
     /// The first line reads as a normal sentence ("epub2tts-edge exited with code
@@ -53,6 +54,14 @@ private struct FailedView: View {
             if !details.isEmpty {
                 LogView(lines: details)
                     .frame(maxWidth: 640, maxHeight: 260)
+            }
+            if viewModel.canReturnToReview {
+                Button("Back to Review") {
+                    viewModel.returnToReview()
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(BardTheme.terracotta)
+                .padding(.top, 8)
             }
             Spacer(minLength: 20)
         }
