@@ -131,7 +131,9 @@ final class JobViewModel {
             throw MistralOCRError.missingAPIKey
         }
         let service = try MistralOCRService(apiKey: apiKey)
-        let bookText = try await service.convertPDF(url: sourceURL) { [weak self] phase, completed, total in
+        let cache = OCRProgressCache(dir: job.workDir.appendingPathComponent("ocr-progress"))
+        let bookText = try await service.convertPDF(url: sourceURL, cache: cache) {
+            [weak self] phase, completed, total in
             Task { @MainActor in
                 self?.job.state = .extracting(detail: "\(phase) \(completed)/\(total)")
                 self?.job.appendLog("\(phase) \(completed)/\(total) done")
@@ -376,6 +378,20 @@ final class JobViewModel {
         job.state = .readyForReview
     }
 
+    /// Extraction failed (or Bard quit mid-extraction) but the source file is still
+    /// in the job directory. Safe to re-run on request: a PDF reuses every OCR chunk
+    /// and cleaned page already saved to `ocr-progress/`, so only the unfinished
+    /// Mistral calls are made again.
+    var canRetryExtraction: Bool {
+        job.state.isFailed && job.txtURL == nil
+            && FileManager.default.fileExists(atPath: sourceInWorkDir.path)
+    }
+
+    func retryExtraction() async {
+        guard canRetryExtraction else { return }
+        await beginExtraction()
+    }
+
     func cancelSynthesis() {
         userCancelled = true
         let handle = processHandle
@@ -515,13 +531,12 @@ extension JobViewModel {
             vm.reloadFromDisk()
             job.state = .readyForReview
         } else {
-            // Extraction itself never finished — for a PDF that may mean OCR calls
-            // already happened but got no further, so this deliberately doesn't
-            // silently redo work (which could burn API credits again); the user
-            // decides whether to delete and re-add the source file.
+            // Extraction itself never finished. Not re-run automatically — a PDF
+            // still has Mistral calls left to make, which the user should opt into —
+            // but Retry resumes from whatever OCR progress was saved.
             job.state = .failed(
                 "Bard quit before \"\(metadata.originalFilename)\" finished extracting. "
-                    + "Delete this and re-add the file to try again.")
+                    + "Click Retry to pick up where it left off.")
         }
         return vm
     }

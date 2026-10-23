@@ -55,6 +55,14 @@ private struct FailedView: View {
                 LogView(lines: details)
                     .frame(maxWidth: 640, maxHeight: 260)
             }
+            if viewModel.canRetryExtraction {
+                Button("Retry") {
+                    Task { await viewModel.retryExtraction() }
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(BardTheme.terracotta)
+                .padding(.top, 8)
+            }
             if viewModel.canReturnToReview {
                 Button("Back to Review") {
                     viewModel.returnToReview()

@@ -6,6 +6,7 @@ enum MistralOCRError: Error, LocalizedError {
     case httpError(Int, String)
     case emptyResponse
     case decodeFailed(String)
+    case network(String)
     /// Distinct from `.httpError` for the specific case of exhausting every
     /// rate-limit retry (see `maxRateLimitRetries`) without Mistral ever
     /// sending a `Retry-After` header. A transient traffic-driven 429 almost
@@ -22,6 +23,9 @@ enum MistralOCRError: Error, LocalizedError {
         case .httpError(let code, let body): return "Mistral request failed (\(code)): \(body)"
         case .emptyResponse: return "Mistral returned an empty response."
         case .decodeFailed(let msg): return "Could not parse Mistral response: \(msg)"
+        case .network(let msg):
+            return "Lost connection to Mistral: \(msg) Pages finished so far are saved — "
+                + "click Retry once you're back online to pick up where it left off."
         case .persistentRateLimit(let attempts, let elapsed):
             let minutes = Int(elapsed / 60)
             return "Mistral rate-limited every request for \(minutes) minute\(minutes == 1 ? "" : "s") straight "
@@ -48,6 +52,31 @@ private struct ChatResponse: Decodable {
         let message: Message
     }
     let choices: [Choice]
+}
+
+/// Every finished OCR chunk, the front-matter result, and every cleaned page are
+/// written here as they complete, so a failure partway through a long book (most
+/// often a dropped connection) can be retried without re-paying for — or
+/// re-waiting on — the hundreds of calls that already succeeded.
+struct OCRProgressCache: Sendable {
+    let dir: URL
+
+    func load<T: Decodable>(_ name: String, as type: T.Type) -> T? {
+        guard let data = try? Data(contentsOf: dir.appendingPathComponent(name)) else { return nil }
+        return try? JSONDecoder().decode(type, from: data)
+    }
+
+    func save<T: Encodable>(_ value: T, as name: String) {
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        guard let data = try? JSONEncoder().encode(value) else { return }
+        try? data.write(to: dir.appendingPathComponent(name), options: .atomic)
+    }
+}
+
+private struct FrontMatter: Codable {
+    let title: String
+    let author: String
+    let startIndex: Int
 }
 
 /// Client for Mistral's OCR + chat endpoints, used together to avoid the
@@ -159,38 +188,57 @@ struct MistralOCRService: Sendable {
     /// meaningful status across the two distinct phases.
     func convertPDF(
         url: URL,
+        cache: OCRProgressCache? = nil,
         onProgress: @escaping @Sendable (String, Int, Int) -> Void
     ) async throws -> BookText {
         let pdfChunks = try PDFSplitter.splitIntoChunks(url: url, maxPages: Self.maxOCRPagesPerChunk)
-        let pages = try await runOCR(pdfChunks: pdfChunks, onProgress: onProgress)
+        let pages = try await runOCR(pdfChunks: pdfChunks, cache: cache, onProgress: onProgress)
         guard !pages.isEmpty else { return BookText(title: "", author: "", content: "") }
 
-        let (title, author, startIndex) = try await detectFrontMatter(pages: pages)
+        let frontMatter: FrontMatter
+        if let cached = cache?.load("frontmatter.json", as: FrontMatter.self), cached.startIndex < pages.count {
+            frontMatter = cached
+        } else {
+            let (title, author, startIndex) = try await detectFrontMatter(pages: pages)
+            frontMatter = FrontMatter(title: title, author: author, startIndex: startIndex)
+            cache?.save(frontMatter, as: "frontmatter.json")
+        }
+        let (title, author, startIndex) = (frontMatter.title, frontMatter.author, frontMatter.startIndex)
 
         let contentPages = Array(pages[startIndex...])
-        let cleaned = try await cleanUp(pages: contentPages, onProgress: onProgress)
+        let cleaned = try await cleanUp(
+            pages: contentPages, firstPageIndex: startIndex, cache: cache, onProgress: onProgress)
 
         return BookText(title: title, author: author, content: cleaned.joined(separator: "\n\n"))
     }
 
     // MARK: - Phase 1: raw OCR
 
+    /// Chunk size is part of the key so a cache written under a different
+    /// maxOCRPagesPerChunk can't be stitched in at the wrong page offsets.
+    private static func ocrCacheKey(_ chunk: Int) -> String { "ocr-\(maxOCRPagesPerChunk)-\(chunk).json" }
+    private static func cleanupCacheKey(_ page: Int) -> String { "cleanup-\(page).json" }
+
     private func runOCR(
         pdfChunks: [Data],
+        cache: OCRProgressCache?,
         onProgress: @escaping @Sendable (String, Int, Int) -> Void
     ) async throws -> [String] {
         let total = pdfChunks.count
-        var results = [[String]?](repeating: nil, count: total)
-        var completed = 0
+        var results = (0..<total).map { cache?.load(Self.ocrCacheKey($0), as: [String].self) }
+        var completed = results.filter { $0 != nil }.count
+        if completed > 0 { onProgress("OCR", completed, total) }
+        let pending = (0..<total).filter { results[$0] == nil }
 
         var index = 0
-        while index < total {
-            let batchEnd = min(index + Self.maxConcurrentOCRChunks, total)
+        while index < pending.count {
+            let batchEnd = min(index + Self.maxConcurrentOCRChunks, pending.count)
             try await withThrowingTaskGroup(of: (Int, [String]).self) { group in
-                for i in index..<batchEnd {
+                for i in pending[index..<batchEnd] {
                     let data = pdfChunks[i]
                     group.addTask {
                         let pages = try await ocrChunk(pdfData: data)
+                        cache?.save(pages, as: Self.ocrCacheKey(i))
                         return (i, pages)
                     }
                 }
@@ -284,21 +332,26 @@ struct MistralOCRService: Sendable {
 
     private func cleanUp(
         pages: [String],
+        firstPageIndex: Int,
+        cache: OCRProgressCache?,
         onProgress: @escaping @Sendable (String, Int, Int) -> Void
     ) async throws -> [String] {
         let total = pages.count
         guard total > 0 else { return [] }
-        var results = [String?](repeating: nil, count: total)
-        var completed = 0
+        var results = (0..<total).map { cache?.load(Self.cleanupCacheKey(firstPageIndex + $0), as: String.self) }
+        var completed = results.filter { $0 != nil }.count
+        if completed > 0 { onProgress("Cleanup", completed, total) }
+        let pending = (0..<total).filter { results[$0] == nil }
 
         var index = 0
-        while index < total {
-            let batchEnd = min(index + Self.maxConcurrentCleanupChunks, total)
+        while index < pending.count {
+            let batchEnd = min(index + Self.maxConcurrentCleanupChunks, pending.count)
             try await withThrowingTaskGroup(of: (Int, String).self) { group in
-                for i in index..<batchEnd {
+                for i in pending[index..<batchEnd] {
                     let page = pages[i]
                     group.addTask {
                         let cleaned = try await chat(prompt: Self.cleanupPrompt, userContent: page)
+                        cache?.save(cleaned, as: Self.cleanupCacheKey(firstPageIndex + i))
                         return (i, cleaned)
                     }
                 }
@@ -348,6 +401,11 @@ struct MistralOCRService: Sendable {
     /// before giving up, versus ~2 minutes before.
     static let maxRateLimitRetries = 9
     static let maxTransientRetries = 1
+    /// A dropped connection (Wi-Fi blip, the Mac waking from sleep) usually
+    /// recovers within seconds to a couple of minutes; one 2s retry used to turn
+    /// that into a dead job. 2+4+8+16+30×4 ≈ 2.5 minutes of waiting before
+    /// giving up.
+    static let maxNetworkRetries = 8
 
     /// Surfaced 429s give no visibility into whether the retry loop actually
     /// ran, how long it waited, or what Retry-After said — logged here (via
@@ -358,7 +416,7 @@ struct MistralOCRService: Sendable {
 
     private func post(
         to url: URL, body: [String: Any], attempt: Int,
-        startedAt: Date = Date(), sawRetryAfter: Bool = false
+        startedAt: Date = Date(), sawRetryAfter: Bool = false, networkAttempt: Int = 0
     ) async throws -> Data {
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -371,15 +429,19 @@ struct MistralOCRService: Sendable {
         let response: URLResponse
         do {
             (data, response) = try await URLSession.shared.data(for: request)
-        } catch {
-            if attempt < Self.maxTransientRetries {
-                try await Task.sleep(nanoseconds: 2_000_000_000)
+        } catch let error as URLError where error.code != .cancelled {
+            if networkAttempt < Self.maxNetworkRetries {
+                let sleepSeconds = min(30, pow(2, Double(networkAttempt + 1)))
+                Self.logger.warning(
+                    "Network error on \(url.lastPathComponent, privacy: .public) (attempt \(networkAttempt + 1, privacy: .public)/\(Self.maxNetworkRetries, privacy: .public)): \(error.localizedDescription, privacy: .public), sleeping \(sleepSeconds, format: .fixed(precision: 0), privacy: .public)s"
+                )
+                try await Task.sleep(nanoseconds: UInt64(sleepSeconds * 1_000_000_000))
                 return try await post(
-                    to: url, body: body, attempt: attempt + 1,
-                    startedAt: startedAt, sawRetryAfter: sawRetryAfter
+                    to: url, body: body, attempt: attempt,
+                    startedAt: startedAt, sawRetryAfter: sawRetryAfter, networkAttempt: networkAttempt + 1
                 )
             }
-            throw MistralOCRError.decodeFailed(error.localizedDescription)
+            throw MistralOCRError.network(error.localizedDescription)
         }
 
         guard let http = response as? HTTPURLResponse else {
@@ -405,14 +467,15 @@ struct MistralOCRService: Sendable {
                 try await Task.sleep(nanoseconds: UInt64(sleepSeconds * 1_000_000_000))
                 return try await post(
                     to: url, body: body, attempt: attempt + 1,
-                    startedAt: startedAt, sawRetryAfter: sawRetryAfter || retryAfter != nil
+                    startedAt: startedAt, sawRetryAfter: sawRetryAfter || retryAfter != nil,
+                    networkAttempt: networkAttempt
                 )
             }
             if http.statusCode >= 500, attempt < Self.maxTransientRetries {
                 try await Task.sleep(nanoseconds: 2_000_000_000)
                 return try await post(
                     to: url, body: body, attempt: attempt + 1,
-                    startedAt: startedAt, sawRetryAfter: sawRetryAfter
+                    startedAt: startedAt, sawRetryAfter: sawRetryAfter, networkAttempt: networkAttempt
                 )
             }
             if http.statusCode == 429 {
